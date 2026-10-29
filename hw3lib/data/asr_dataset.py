@@ -86,17 +86,16 @@ class ASRDataset(Dataset):
 
         # Set up data paths
         # TODO: Use root and partition to get the feature directory
-        self.fbank_dir   = os.path.join(config['data']['root'], partition, 'fbank')
+        self.fbank_dir   = os.path.join(config['root'], partition, 'fbank')
 
         # TODO: Get all feature files in the feature directory in sorted order
         self.fbank_files = [
-            os.path.join(self.fbank_dir, name)
-            for name in sorted(os.listdir(self.fbank_dir))
+            name for name in sorted(os.listdir(self.fbank_dir))
             if os.path.isfile(os.path.join(self.fbank_dir, name))
         ]
 
         # TODO: Take subset
-        subset_size      = config['data']['subset']
+        subset_size      = config['subset']
         # TODO: Get the number of samples in the dataset
         self.length      = int(len(self.fbank_files) * subset_size)
         self.fbank_files = self.fbank_files[:self.length]
@@ -106,12 +105,11 @@ class ASRDataset(Dataset):
         # Why will test-clean need to be handled differently?
         if self.partition != "test-clean":
             # TODO: Use root and partition to get the text directory
-            self.text_dir   = os.path.join(config['data']['root'], 'text')
+            self.text_dir   = os.path.join(config['root'], partition, 'text')
 
             # TODO: Get all text files in the text directory in sorted order
             self.text_files = [
-                os.path.join(self.text_dir, name)
-                for name in sorted(os.listdir(self.text_dir))
+                name for name in sorted(os.listdir(self.text_dir))
                 if os.path.isfile(os.path.join(self.text_dir, name))
             ]
 
@@ -148,13 +146,13 @@ class ASRDataset(Dataset):
         for i in tqdm(range(self.length)):
             # TODO: Load features
             # Features are of shape (num_feats, time)
-            feat = np.load(self.fbank_files[i])
+            feat = np.load(os.path.join(self.fbank_dir, self.fbank_files[i]))
 
             # TODO: Truncate features to num_feats set by you in the config
             feat = feat[:config['num_feats'], :]
 
             # Append to self.feats (num_feats is set by you in the config)
-            self.feats.append(feat)
+            self.feats.append(torch.tensor(feat, dtype=torch.float32))
 
             # Track max length (time dimension)
             self.feat_max_len = max(self.feat_max_len, feat.shape[1])
@@ -174,7 +172,7 @@ class ASRDataset(Dataset):
             if self.partition != "test-clean":
                 # TODO: Load the transcript
                 # Important Note: This is a very important line of code and you should check whether your transcript is correct after loading (and very dependent in evaluation)
-                transcript = np.load(self.text_files[i])
+                transcript = ''.join(np.load(os.path.join(self.text_dir, self.text_files[i])))
 
                 # TODO: Track character count (before tokenization)
                 self.total_chars += len(transcript)
@@ -191,8 +189,8 @@ class ASRDataset(Dataset):
                 self.text_max_len = max(self.text_max_len, len(tokenized)+1)
 
                 # TODO: Create shifted and golden versions by adding sos and eos tokens
-                self.transcripts_shifted.append([tokenizer.sos_id] + transcript)
-                self.transcripts_golden.append(transcript + [tokenizer.eos_id])
+                self.transcripts_shifted.append(torch.tensor([tokenizer.sos_id] + tokenized, dtype=torch.long))
+                self.transcripts_golden.append(torch.tensor(tokenized + [tokenizer.eos_id], dtype=torch.long))
 
 
         # Calculate average characters per token
@@ -294,43 +292,43 @@ class ASRDataset(Dataset):
         batch_feats  = [i[0].T for i in batch]
 
         # TODO: Collect feature lengths from the batch into a tensor
-        feat_lengths = [i[0].shape[1] for i in batch] # B
+        feat_lengths = torch.tensor([feat.shape[0] for feat in batch_feats], dtype=torch.long) # B
 
         # TODO: Pad features to create a batch of fixed-length padded features
-        padded_feats = NotImplementedError # B x T x F
+        padded_feats = pad_sequence(batch_feats, batch_first=True, padding_value=0.0) # B x T x F
 
         # TODO: Handle transcripts for non-test partitions
         padded_shifted, padded_golden, transcript_lengths = None, None, None
         if self.partition != "test-clean":
             # TODO: Collect shifted and golden transcripts from the batch into a list of tensors (B x T)
-            batch_shifted      = NotImplementedError # B x T
-            batch_golden       = NotImplementedError # B x T
+            batch_shifted      = [i[1] for i in batch] # B x T
+            batch_golden       = [i[2] for i in batch] # B x T
 
             # TODO: Collect transcript lengths from the batch into a tensor
-            transcript_lengths = NotImplementedError # B
+            transcript_lengths = torch.tensor([transcript.shape[0] for transcript in batch_shifted], dtype=torch.long) # B
 
             # TODO: Pad transcripts to create a batch of fixed-length padded transcripts
-            padded_shifted     = NotImplementedError # B x T
-            padded_golden      = NotImplementedError # B x T
+            padded_shifted     = pad_sequence(batch_shifted, batch_first=True, padding_value=self.pad_token) # B x T
+            padded_golden      = pad_sequence(batch_golden, batch_first=True, padding_value=self.pad_token) # B x T
 
         # TODO: Apply SpecAugment for training
         if self.config["specaug"] and self.isTrainPartition:
             # TODO: Permute the features to (B x F x T)
-            padded_feats = NotImplementedError # B x F x T
+            padded_feats = padded_feats.transpose(1, 2) # B x F x T
 
             # TODO: Apply frequency masking
             if self.config["specaug_conf"]["apply_freq_mask"]:
                 for _ in range(self.config["specaug_conf"]["num_freq_mask"]):
-                    padded_feats = NotImplementedError
+                    padded_feats = self.freq_mask(padded_feats)
 
             # TODO: Apply time masking
             if self.config["specaug_conf"]["apply_time_mask"]:
                 for _ in range(self.config["specaug_conf"]["num_time_mask"]):
-                    padded_feats = NotImplementedError
+                    padded_feats = self.time_mask(padded_feats)
 
             # TODO: Permute the features back to (B x T x F)
-            padded_feats = NotImplementedError # B x T x F
+            padded_feats = padded_feats.transpose(1, 2) # B x T x F
 
         # TODO: Return the padded features, padded shifted, padded golden, feature lengths, and transcript lengths
-        raise NotImplementedError # Remove once implemented
+        return padded_feats, padded_shifted, padded_golden, feat_lengths, transcript_lengths
 

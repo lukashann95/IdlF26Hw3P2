@@ -31,24 +31,30 @@ class PositionalEncoding(nn.Module):
         Args:
             d_model (int): The dimension of the model.
             max_len (int): The maximum length of the input sequence.
-        """     
+        """
         super().__init__()
         self.create_pe_table(d_model, max_len)
 
     def create_pe_table(self, d_model, max_len):
         """
         Create the positional encoding table.
-        
+
         Args:
             d_model (int): The dimension of the model.
             max_len (int): The maximum length of the input sequence.
         """
         # TODO: Implement create_pe_table
-        raise NotImplementedError # Remove once implemented
-        pe = NotImplementedError
+        positions = torch.arange(max_len, dtype=torch.float32).unsqueeze(1)
+        inv_freq = torch.exp(torch.arange(0, d_model, 2, dtype=torch.float32) * (-math.log(10000.0) / d_model))
+        angles = positions * inv_freq  # (max_len, ceil(d_model / 2))
+
+        pe = torch.zeros(max_len, d_model)
+        pe[:, 0::2] = torch.sin(angles)
+        pe[:, 1::2] = torch.cos(angles[:, :d_model // 2])
+        pe = pe.unsqueeze(0)  # (1, max_len, d_model)
         # Register as buffer to save with model state
         self.register_buffer('pe', pe)
-        
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -58,16 +64,16 @@ class PositionalEncoding(nn.Module):
         Returns:
             torch.Tensor: Input with positional encoding added (B x T x d_model)
         Errors:
-            - ValueError: If sequence length exceeds maximum length 
+            - ValueError: If sequence length exceeds maximum length
         """
         # TODO: Implement forward
         # Step 1: Get sequence length from input tensor
-        seq_len = NotImplementedError
+        seq_len = x.shape[1]
         # Step 2: Verify sequence length doesn't exceed maximum length, raise error if it does
         if seq_len > self.pe.size(1):
             raise ValueError(f"Sequence length {seq_len} exceeds the maximum length {self.pe.size(1)}")
         # Step 3: Add positional encodings to input
-        raise NotImplementedError # Remove once implemented
+        return x + self.pe[:, :seq_len, :]
 
 ## -------------------------------------------------------------------------------------------------
 
@@ -102,9 +108,19 @@ class RotaryPositionalEncoding(nn.Module):
         # Step 1: Compute the inverse frequencies for the head_dim//2 pairs
         # Step 2: Take the outer product with the positions to get the angles
         # Step 3: Widen the angles to head_dim so each pair shares an angle, then take cos and sin
-        raise NotImplementedError # Remove once implemented
-        cos = NotImplementedError
-        sin = NotImplementedError
+        # One frequency per pair: (head_dim // 2,)
+        inv_freq = base ** (-torch.arange(0, head_dim, 2, dtype=torch.float32) / head_dim)
+
+        # One angle per position and pair: (max_len, head_dim // 2)
+        positions = torch.arange(max_len, dtype=torch.float32)
+        angles = positions[:, None] * inv_freq[None, :]
+
+        # Dimensions i and i + head_dim//2 share an angle.
+        angles = torch.cat([angles, angles], dim=-1)
+
+        # Shape: (1, 1, max_len, head_dim)
+        cos = angles.cos().unsqueeze(0).unsqueeze(0)
+        sin = angles.sin().unsqueeze(0).unsqueeze(0)
         # Register as buffers to save with model state
         self.register_buffer('cos', cos)
         self.register_buffer('sin', sin)
@@ -120,7 +136,10 @@ class RotaryPositionalEncoding(nn.Module):
             torch.Tensor: Rotated tensor of the same shape
         """
         # TODO: Implement rotate_half
-        raise NotImplementedError # Remove once implemented
+        half = x.shape[-1] // 2
+        first_half = x[..., :half]
+        second_half = x[..., half:]
+        return torch.cat([-second_half, first_half], dim=-1)
 
     def forward(self, q: torch.Tensor, k: torch.Tensor, offset: int = 0):
         """
@@ -137,10 +156,14 @@ class RotaryPositionalEncoding(nn.Module):
         """
         # TODO: Implement forward
         # Step 1: Get sequence length from the query tensor
-        seq_len = NotImplementedError
+        seq_len = q.shape[2]
         # Step 2: Verify sequence length doesn't exceed maximum length, raise error if it does
         if offset + seq_len > self.cos.size(2):
             raise ValueError(f"Sequence length {offset + seq_len} exceeds the maximum length {self.cos.size(2)}")
         # Step 3: Slice the cos and sin tables to the positions in use
+        cos = self.cos[:, :, offset:offset + seq_len, :]
+        sin = self.sin[:, :, offset:offset + seq_len, :]
         # Step 4: Rotate q and k, where rotating x is  x * cos + self.rotate_half(x) * sin
-        raise NotImplementedError # Remove once implemented
+        q = q * cos + self.rotate_half(q) * sin
+        k = k * cos + self.rotate_half(k) * sin
+        return q, k

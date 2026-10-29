@@ -1,6 +1,6 @@
 import torch
 
-''' 
+'''
 TODO: Implement this function.
 
 Specification:
@@ -15,8 +15,8 @@ Specification:
 - Mask should be on same device as input tensor
 '''
 def PadMask(padded_input, input_lengths):
-    """ 
-    Create a mask for padding positions. 
+    """
+    Create a mask for padding positions.
     Args:
         padded_input: The input tensor, shape (N, T, ...).
         input_lengths: Actual lengths before padding, shape (N,).
@@ -24,9 +24,14 @@ def PadMask(padded_input, input_lengths):
         Boolean mask tensor with shape (N, T).
     """
     # TODO: Implement PadMask
-    raise NotImplementedError # Remove once implemented
+    positions = torch.arange(
+        padded_input.shape[1], device=padded_input.device
+    )
+    lengths = input_lengths.to(padded_input.device)
+    mask = positions.unsqueeze(0) >= lengths.unsqueeze(1)
+    return mask
 
-''' 
+'''
 TODO: Implement this function.
 
 Specification:
@@ -39,12 +44,15 @@ Specification:
 - Mask should be upper triangular (excluding diagonal)
 '''
 def CausalMask(padded_input):
-    """ 
-    Create a causal mask for self-attention. 
+    """
+    Create a causal mask for self-attention.
     Args:
         padded_input: Input tensor, shape (N, T, ...).
     Returns:
         Boolean mask tensor with shape (T, T).
     """
-    raise NotImplementedError
-
+    T = padded_input.shape[1]
+    return torch.triu(
+        torch.ones((T, T), dtype=torch.bool, device=padded_input.device),
+        diagonal=1,
+    )

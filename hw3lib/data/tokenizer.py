@@ -1,4 +1,5 @@
-from typing import Literal, List, Dict
+from typing import Literal, List, Dict, Union
+import torch
 from tokenizers import Tokenizer, decoders, processors
 
 '''
@@ -125,16 +126,18 @@ class H3Tokenizer:
         """
         return self.tokenizer.encode(text).ids
 
-    def decode(self, token_ids: List[int], skip_special_tokens: bool=False) -> str:
+    def decode(self, token_ids: Union[List[int], torch.Tensor], skip_special_tokens: bool=False) -> str:
         """
         Convert token IDs back to text.
 
         Args:
-            token_ids: List of token IDs to decode
+            token_ids: List or one-dimensional tensor of token IDs to decode
 
         Returns:
             Decoded text string
         """
+        if isinstance(token_ids, torch.Tensor):
+            token_ids = token_ids.tolist()
         return self.tokenizer.decode(token_ids, skip_special_tokens=skip_special_tokens)
 
     def _validate_tokenizer(self) -> None:
