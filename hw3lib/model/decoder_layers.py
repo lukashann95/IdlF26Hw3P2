@@ -29,9 +29,9 @@ Implementation Steps:
    - Return both outputs and attention weights
 '''
 
-## -------------------------------------------------------------------------------------------------  
+## -------------------------------------------------------------------------------------------------
 ## Decoder Layers
-## -------------------------------------------------------------------------------------------------      
+## -------------------------------------------------------------------------------------------------
 class CrossAttentionDecoderLayer(nn.Module):
     '''
     Pre-LN Decoder Layer with masked self-attention, cross-attention, and feed-forward sublayers.
@@ -57,8 +57,10 @@ class CrossAttentionDecoderLayer(nn.Module):
         super().__init__()
         # TODO: Implement __init__
 
-        # TODO: Initialize the sublayers  
-        raise NotImplementedError # Remove once implemented
+        # TODO: Initialize the sublayers
+        self.self_attention = SelfAttentionLayer(d_model, num_heads, dropout, norm_type, rope, qk_norm)
+        self.cross_attention = CrossAttentionLayer(d_model, num_heads, dropout, norm_type, qk_norm)
+        self.feedforward = FeedForwardLayer(d_model, d_ff, dropout, norm_type, ffn_type)
 
     def forward(self, x: torch.Tensor, enc_output: torch.Tensor, dec_key_padding_mask: Optional[torch.Tensor] = None, enc_key_padding_mask: Optional[torch.Tensor] = None, attn_mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         '''
@@ -75,8 +77,11 @@ class CrossAttentionDecoderLayer(nn.Module):
             cross_attn_weights (torch.Tensor): The attention weights. shape: (batch_size, dec_seq_len, enc_seq_len)
         '''
         # TODO: Implement forward: Follow the figure in the writeup
+        x, self_attn_weights = self.self_attention(x, dec_key_padding_mask, attn_mask)
+        x, cross_attn_weights = self.cross_attention(x, enc_output, enc_key_padding_mask)
+        x = self.feedforward(x)
 
 
-        # TODO: Return the output tensor and attention weights    
-        raise NotImplementedError # Remove once implemented
-## -------------------------------------------------------------------------------------------------    
+        # TODO: Return the output tensor and attention weights
+        return x, self_attn_weights, cross_attn_weights
+## -------------------------------------------------------------------------------------------------
