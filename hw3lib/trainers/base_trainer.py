@@ -31,13 +31,13 @@ class BaseTrainer(ABC):
     - Creates organized directory structure for experiments
     - Handles config file copying and model architecture saving
     - Manages checkpoint saving and loading
-    
+
     2. Logging and Visualization:
     - Supports both local and wandb logging
     - Saves attention visualizations
     - Tracks training metrics and learning rates
     - Saves generated text outputs
-    
+
     3. Training Infrastructure:
     - Handles device placement
     - Manages optimizer creation
@@ -83,13 +83,13 @@ class BaseTrainer(ABC):
         # If device is not specified, determine it
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
-        
+
         print(f"Using device: {device}")
         self.device = device
         self.model = model.to(self.device)
         self.tokenizer = tokenizer
         self.config = config
-        
+
         # Initialize optimizer and scheduler
         self.optimizer = None  # Should be set by child class
         self.scheduler = None  # Will be set when training starts
@@ -104,7 +104,7 @@ class BaseTrainer(ABC):
         self.current_epoch = 0
         self.best_metric = float('inf')
         self.training_history = []
-    
+
     @abstractmethod
     def _train_epoch(self, dataloader) -> Tuple[Dict[str, float], Dict[str, torch.Tensor]]:
         """Train for one epoch."""
@@ -231,9 +231,9 @@ class BaseTrainer(ABC):
                 max_len = 1000
                 num_feats = self.config['data']['num_feats']
                 input_data = [
-                    torch.randn(batch_size, max_len, num_feats).to(self.device), 
-                    torch.randint(0, self.model.num_classes, (batch_size, max_len//10)).to(self.device), 
-                    torch.randint(max_len//2, max_len, (batch_size,)).to(self.device), 
+                    torch.randn(batch_size, max_len, num_feats).to(self.device),
+                    torch.randint(0, self.model.num_classes, (batch_size, max_len//10)).to(self.device),
+                    torch.randint(max_len//2, max_len, (batch_size,)).to(self.device),
                     torch.randint(max_len//20, max_len//10, (batch_size,)).to(self.device)
                 ]
                 dtypes = [torch.float32, torch.long, torch.long, torch.long]
@@ -252,7 +252,7 @@ class BaseTrainer(ABC):
         checkpoint_dir = expt_root / 'checkpoints'
         attn_dir = expt_root / 'attn'
         text_dir = expt_root / 'text'
-        
+
         checkpoint_dir.mkdir(exist_ok=True)
         attn_dir.mkdir(exist_ok=True)
         text_dir.mkdir(exist_ok=True)
@@ -295,7 +295,7 @@ class BaseTrainer(ABC):
             **metrics,
             'lr': self.optimizer.param_groups[0]['lr']
         })
-        
+
         # Log to wandb
         if self.use_wandb and self.wandb_run is not None:
             wandb_metrics = {}
@@ -317,14 +317,14 @@ class BaseTrainer(ABC):
 
         # Print metrics with tree structure
         print(f"\n📊 Metrics (Epoch {step}):")
-        
+
         # Print metrics by split
         splits = sorted(metrics.keys())
         for i, split in enumerate(splits):
             is_last_split = i == len(splits) - 1
             split_prefix = "└──" if is_last_split else "├──"
             print(f"{split_prefix} {split.upper()}:")
-            
+
             # Print metrics within split
             split_metrics = sorted(metrics[split].items())
             for j, (metric_name, value) in enumerate(split_metrics):
@@ -335,7 +335,7 @@ class BaseTrainer(ABC):
                 else:
                     metric_prefix = "│   └──" if is_last_metric else "│   ├──"
                 print(f"{metric_prefix} {metric_name}: {value:.4f}")
-        
+
         # Print learning rate
         print("└── TRAINING:")
         print(f"    └── learning_rate: {self.optimizer.param_groups[0]['lr']:.6f}")
@@ -345,17 +345,17 @@ class BaseTrainer(ABC):
         """Save attention weights visualization."""
         if isinstance(attn_weights, torch.Tensor):
             attn_weights = attn_weights.cpu().detach().numpy()
-        
+
         plt.figure(figsize=(10, 8))
         sns.heatmap(attn_weights, cmap="viridis", cbar=True)
         plt.title(f"Attention Weights - Epoch {epoch}")
         plt.xlabel("Source Sequence")
         plt.ylabel("Target Sequence")
-        
+
         plot_path = os.path.join(self.attn_dir, f"{attn_type}_attention_epoch{epoch}.png")
         plt.savefig(plot_path)
         plt.close()
-        
+
         if self.use_wandb and self.wandb_run is not None:
             self.wandb_run.log(
                 {
@@ -371,7 +371,7 @@ class BaseTrainer(ABC):
         text_path = os.path.join(self.text_dir, f"text_{suffix}.json")
         with open(text_path, "w") as f:
             json.dump(text, f, indent=4)
-    
+
         if self.use_wandb and self.wandb_run is not None:
             self.wandb_run.save(text_path)
 

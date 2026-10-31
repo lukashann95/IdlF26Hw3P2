@@ -18,19 +18,19 @@ def create_optimizer(model, opt_config):
 
     # Prepare parameter groups
     parameter_groups = []
-    
+
     # Handle parameter groups if specified
     param_groups_config = opt_config.get('param_groups', [])
     if param_groups_config:
         print("├── Parameter Groups:")
         # Track which parameters have been assigned to groups
         assigned_params = set()
-        
+
         for group_cfg in param_groups_config:
             group_params = []
             group_lr = group_cfg.get('lr', base_lr)
             patterns = group_cfg['patterns']  # List of patterns to match parameter names
-            
+
             print(f"│   ├── Group: {group_cfg['name']}")
             print(f"│   │   ├── LR: {group_lr}")
             print(f"│   │   └── Patterns: {patterns}")
@@ -38,35 +38,35 @@ def create_optimizer(model, opt_config):
             # Layer-wise decay settings for this group
             use_layer_decay = group_cfg.get('layer_decay', {}).get('enabled', False)
             decay_rate = group_cfg.get('layer_decay', {}).get('decay_rate', 1.0)
-            
+
             # Collect parameters matching the patterns
             for name, param in model.named_parameters():
                 if not param.requires_grad:
                     continue
-                    
+
                 # Check if parameter matches any pattern for this group
                 if any(pattern in name for pattern in patterns):
                     if name in assigned_params:
                         continue
-                    
+
                     assigned_params.add(name)
-                    
+
                     # Apply layer-wise decay if enabled for this group
                     if use_layer_decay:
                         depth = name.count('.')
                         actual_lr = group_lr * (decay_rate ** depth)
                     else:
                         actual_lr = group_lr
-                    
+
                     group_params.append({
                         'params': param,
                         'lr': actual_lr,
                         'name': name
                     })
-            
+
             if group_params:
                 parameter_groups.extend(group_params)
-    
+
         # Handle remaining parameters
         remaining_params = []
         for name, param in model.named_parameters():
@@ -77,7 +77,7 @@ def create_optimizer(model, opt_config):
                 'lr': base_lr,
                 'name': name
             })
-        
+
         if remaining_params:
             print("│   └── Default Group (unmatched parameters)")
             parameter_groups.extend(remaining_params)
